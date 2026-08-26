@@ -1,0 +1,47 @@
+name: Fix workbook parser
+on:
+  push:
+    paths:
+      - '.github/workflows/fix-ledger-parser.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch index.html
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          old_find = "function findHeader(rows){let best=0,bs=-1;for(let i=0;i<Math.min(rows.length,80);i++){let s=0;for(const v of rows[i]||[])for(const t in W)if(score(v,t)){s++;break}if(s>bs){bs=s;best=i}}return best}"
+          new_find = "function findHeader(rows){let best=-1,bs=0;for(let i=0;i<Math.min(rows.length,100);i++){let fields=new Set();for(const v of rows[i]||[])for(const t in W)if(score(v,t)){fields.add(t);break}let s=fields.size;if(s>bs){bs=s;best=i}}return best}"
+          if old_find not in s:
+              raise SystemExit('Expected findHeader code not found')
+          s = s.replace(old_find, new_find, 1)
+
+          old_read = "async function readFile(file){let data=await file.arrayBuffer(),wb=XLSX.read(data,{type:'array',cellDates:true}),ws=wb.Sheets[wb.SheetNames[0]],rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}),hi=findHeader(rows),headers=(rows[hi]||[]).map(x=>String(x??'')),m=mapping(headers,rows.slice(hi+1,hi+11));return{file,wb,rows,hi,headers,m}}"
+          new_read = "async function readFile(file){let data=await file.arrayBuffer(),wb=XLSX.read(data,{type:'array',cellDates:true}),best=null;for(const sheetName of wb.SheetNames){let ws=wb.Sheets[sheetName],rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''}),hi=findHeader(rows);if(hi<0)continue;let headers=(rows[hi]||[]).map(x=>String(x??'')),m=mapping(headers,rows.slice(hi+1,hi+11)),scoreCount=[m.date,m.desc,m.ref,m.amount,m.debit,m.credit,m.balance].filter(v=>v>=0).length,txRows=rows.length-hi-1;if(!best||scoreCount>best.scoreCount||(scoreCount===best.scoreCount&&txRows>best.txRows))best={sheetName,ws,rows,hi,headers,m,scoreCount,txRows}}if(!best||best.scoreCount<2)throw new Error('Could not identify a transaction worksheet in '+file.name+'. Please ensure the workbook contains a clear Date/Description/Reference/Amount or Debit/Credit header row.');return{file,wb,ws:best.ws,sheetName:best.sheetName,rows:best.rows,hi:best.hi,headers:best.headers,m:best.m}}"
+          if old_read not in s:
+              raise SystemExit('Expected readFile code not found')
+          s = s.replace(old_read, new_read, 1)
+
+          old_mapping = "$('mappingText').innerHTML=`<b>Bank:</b> ${esc(S.bank.headers.join(' | '))}<br>Detected date column ${S.bank.m.date+1}, description ${S.bank.m.desc+1}, reference ${S.bank.m.ref+1}, amount ${S.bank.m.amount+1}, debit ${S.bank.m.debit+1}, credit ${S.bank.m.credit+1}, balance ${S.bank.m.balance+1}.<br><br><b>Ledger:</b> ${esc(S.ledger.headers.join(' | '))}<br>Detected date column ${S.ledger.m.date+1}, description ${S.ledger.m.desc+1}, reference ${S.ledger.m.ref+1}, amount ${S.ledger.m.amount+1}, debit ${S.ledger.m.debit+1}, credit ${S.ledger.m.credit+1}, balance ${S.ledger.m.balance+1}.`"
+          new_mapping = "$('mappingText').innerHTML=`<b>Bank worksheet:</b> ${esc(S.bank.sheetName)}<br><b>Headers:</b> ${esc(S.bank.headers.join(' | '))}<br>Detected date column ${S.bank.m.date+1}, description ${S.bank.m.desc+1}, reference ${S.bank.m.ref+1}, amount ${S.bank.m.amount+1}, debit ${S.bank.m.debit+1}, credit ${S.bank.m.credit+1}, balance ${S.bank.m.balance+1}.<br><br><b>Ledger worksheet:</b> ${esc(S.ledger.sheetName)}<br><b>Headers:</b> ${esc(S.ledger.headers.join(' | '))}<br>Detected date column ${S.ledger.m.date+1}, description ${S.ledger.m.desc+1}, reference ${S.ledger.m.ref+1}, amount ${S.ledger.m.amount+1}, debit ${S.ledger.m.debit+1}, credit ${S.ledger.m.credit+1}, balance ${S.ledger.m.balance+1}.`"
+          if old_mapping not in s:
+              raise SystemExit('Expected mapping display code not found')
+          s = s.replace(old_mapping, new_mapping, 1)
+
+          p.write_text(s, encoding='utf-8')
+      - name: Commit parser fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Fix ledger worksheet detection and mapping'
+          git push
