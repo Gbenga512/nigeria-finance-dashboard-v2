@@ -14,13 +14,13 @@
   function render(){
     if(!window.S || !S.r || !S.bank || !S.ledger || !document.getElementById('report')) return false;
     const r=S.r;
-    const unmatched=r.un||[];
-    const gl=unmatched.filter(x=>x.src==='Ledger' && !/reversal|self-cancelling|net effect is zero/i.test(x.why||''));
-    const bank=unmatched.filter(x=>x.src==='Bank');
+    // The reconciliation engine stores genuine exceptions in unB/unL.
+    const bank=r.unB||[];
+    const gl=r.unL||[];
     const glCredit=gl.filter(x=>amt(x)>=0), glDebit=gl.filter(x=>amt(x)<0);
     const bankCredit=bank.filter(x=>amt(x)>=0), bankDebit=bank.filter(x=>amt(x)<0);
     const charges=bank.filter(x=>/fee|charge|vat|stamp|nip|rtgs|sms|amf|remita|commission|levy|tax/i.test(desc(x)+' '+ref(x)));
-    const chargeValue=sum(charges.map(x=>({r:{amt:Math.abs(amt(x))}})));
+    const chargeValue=charges.reduce((a,x)=>a+Math.abs(amt(x)),0);
     const totalBank=sum(S.bank), totalLedger=sum(S.ledger);
     const ledgerDebits=S.ledger.filter(x=>Number(x.amt)<0).reduce((a,x)=>a+Math.abs(Number(x.amt)||0),0);
     const ledgerCredits=S.ledger.filter(x=>Number(x.amt)>=0).reduce((a,x)=>a+Number(x.amt||0),0);
