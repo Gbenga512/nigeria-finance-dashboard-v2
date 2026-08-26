@@ -1,0 +1,39 @@
+name: Fix column mapping UI
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, 'Fix column mapping UI') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch header detection and mapping dropdowns
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = "function findHeader(rows){let best=0,bs=-1;for(let i=0;i<Math.min(rows.length,80);i++){let s=0;for(const v of rows[i]||[])for(const t in W)if(score(v,t)){s++;break}if(s>bs){bs=s;best=i}}return best}"
+          new = "function headerLooksLikeMetadata(v){let s=String(v??'').trim();return s.length>120||/^\\s*[\\[{]/.test(s)||/dictionaryAddress|serverUrlAddress|documentUrlAddress|worksheet/i.test(s)}function findHeader(rows){let best=0,bs=-1;for(let i=0;i<Math.min(rows.length,120);i++){let row=rows[i]||[],scoreRow=0,usable=0,metadata=0;for(const v of row){let text=String(v??'').trim();if(!text)continue;if(headerLooksLikeMetadata(text)){metadata++;continue}usable++;let hit=0;for(const t in W){if(score(text,t)){hit=1;break}}scoreRow+=hit}scoreRow=scoreRow*20+Math.min(usable,12)-metadata*25;if(scoreRow>bs){bs=scoreRow;best=i}}return best}"
+          if old not in s:
+              raise SystemExit('Expected header function not found')
+          s=s.replace(old,new,1)
+          old2 = "const make=(prefix,x)=>fields.map(([key,label])=>{const sel=prefix+'-'+key;const opts=['<option value=\"-1\">— Not used —</option>'].concat(x.headers.map((h,i)=>`<option value=\"${i}\">${esc(h||('Column '+(i+1)))}</option>`)).join('');return `<div class=\"mapitem\"><label for=\"${sel}\">${label}</label><select id=\"${sel}\">${opts}</select></div>`}).join('');"
+          new2 = "const make=(prefix,x)=>fields.map(([key,label])=>{const sel=prefix+'-'+key;const opts=['<option value=\"-1\">— Not used —</option>'].concat(x.headers.map((h,i)=>{let clean=String(h??'').trim();if(!clean||headerLooksLikeMetadata(clean))clean='Column '+(i+1);return `<option value=\"${i}\">${esc(clean)}</option>`})).join('');return `<div class=\"mapitem\"><label for=\"${sel}\">${label}</label><select id=\"${sel}\">${opts}</select></div>`}).join('');"
+          if old2 not in s:
+              raise SystemExit('Expected mapping renderer not found')
+          s=s.replace(old2,new2,1)
+          p.write_text(s,encoding='utf-8')
+      - name: Commit patch
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Fix column mapping UI'
+          git push
