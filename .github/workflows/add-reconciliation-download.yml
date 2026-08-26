@@ -7,8 +7,34 @@ permissions:
   contents: write
 
 jobs:
-  test:
+  fix:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: echo "workflow test"
+      - name: Add download button and handler
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          anchor = '<button id="printBtn" class="btn success">Print / Save as PDF</button>'
+          button = '<button id="downloadBtn" class="btn secondary">Download reconciliation sheet</button>'
+          if 'id="downloadBtn"' not in s:
+              if anchor not in s:
+                  raise SystemExit('Print button anchor not found')
+              s = s.replace(anchor, anchor + button, 1)
+          payload = 'CjxzY3JpcHQ+CihmdW5jdGlvbigpewogIGZ1bmN0aW9uIGRvd25sb2FkU2hlZXQoKXsKICAgIGNvbnN0IHJlcG9ydD1kb2N1bWVudC5nZXRFbGVtZW50QnlJZCgncmVwb3J0Jyk7CiAgICBpZighcmVwb3J0IHx8ICFyZXBvcnQuaW5uZXJIVE1MLnRyaW0oKSl7IGFsZXJ0KCdQbGVhc2UgY29tcGxldGUgdGhlIHJlY29uY2lsaWF0aW9uIGZpcnN0LicpOyByZXR1cm47IH0KICAgIGNvbnN0IHRpdGxlPShkb2N1bWVudC50aXRsZXx8J0JhbmsgUmVjb25jaWxpYXRpb24gU3RhdGVtZW50JykucmVwbGFjZSgvW15hLXowLTlfLV0rL2dpLCctJyk7CiAgICBjb25zdCBjc3M9YGJvZHl7Zm9udC1mYW1pbHk6QXJpYWwsSGVsdmV0aWNhLHNhbnMtc2VyaWY7YmFja2dyb3VuZDojZmZmO2NvbG9yOiMxMTE7bWFyZ2luOjA7cGFkZGluZzoyNHB4fS53b3JraW5ne2JhY2tncm91bmQ6I2ZmZjtjb2xvcjojMTExO21heC13aWR0aDoxMDAwcHg7bWFyZ2luOmF1dG87cGFkZGluZzoyNXB4fS53b3JraW5nIC50aXRsZXt0ZXh0LWFsaWduOmNlbnRlcjtib3JkZXItYm90dG9tOjJweCBzb2xpZCAjMzMzO3BhZGRpbmctYm90dG9tOjEwcHg7bWFyZ2luLWJvdHRvbToxMnB4fS53b3JraW5nIC50aXRsZSBoMXtmb250LXNpemU6MTlweDttYXJnaW46MH0ud29ya2luZyAudGl0bGUgaDJ7Zm9udC1zaXplOjE0cHg7bWFyZ2luOjVweCAwfS53b3JraW5nIHRhYmxle3dpZHRoOjEwMCU7Ym9yZGVyLWNvbGxhcHNlOmNvbGxhcHNlO21pbi13aWR0aDowfS53b3JraW5nIHRoLC53b3JraW5nIHRke2JvcmRlcjoxcHggc29saWQgIzU1NTtwYWRkaW5nOjVweCA2cHg7Zm9udC1zaXplOjEwLjVweH0ud29ya2luZyB0aHtiYWNrZ3JvdW5kOiNkZGR9LndvcmtpbmcgLmJhcmhlYWR7YmFja2dyb3VuZDojNjY2O2NvbG9yOiNmZmY7Zm9udC13ZWlnaHQ6NzAwfS53b3JraW5nIC5zaGFkZXtiYWNrZ3JvdW5kOiNkZGQ7Zm9udC13ZWlnaHQ6NzAwfS53b3JraW5nIC50b3RhbHtmb250LXdlaWdodDo3MDA7YmFja2dyb3VuZDojZWVlfS53b3JraW5nIC5hbW91bnR7dGV4dC1hbGlnbjpyaWdodDt3aGl0ZS1zcGFjZTpub3dyYXB9LndvcmtpbmcgLm1lbW97Zm9udC1zaXplOjEwLjVweDtmb250LXN0eWxlOml0YWxpYzttYXJnaW46OHB4IDB9LndvcmtpbmcgLnZhcmlhbmNle2ZvbnQtd2VpZ2h0OjgwMH1gOwogICAgY29uc3QgaHRtbD0nPCFkb2N0eXBlIGh0bWw+PGh0bWw+PGhlYWQ+PG1ldGEgY2hhcnNldD0idXRmLTgiPjx0aXRsZT4nK3RpdGxlKyc8L3RpdGxlPjxzdHlsZT4nK2NzcysnPC9zdHlsZT48L2hlYWQ+PGJvZHk+JytyZXBvcnQuaW5uZXJIVE1MKyc8L2JvZHk+PC9odG1sPic7CiAgICBjb25zdCBibG9iPW5ldyBCbG9iKFtodG1sXSx7dHlwZTondGV4dC9odG1sO2NoYXJzZXQ9dXRmLTgnfSk7CiAgICBjb25zdCB1cmw9VVJMLmNyZWF0ZU9iamVjdFVSTChibG9iKTsKICAgIGNvbnN0IGE9ZG9jdW1lbnQuY3JlYXRlRWxlbWVudCgnYScpOyBhLmhyZWY9dXJsOyBhLmRvd25sb2FkPXRpdGxlKyctcmVjb25jaWxpYXRpb24uaHRtbCc7IGRvY3VtZW50LmJvZHkuYXBwZW5kQ2hpbGQoYSk7IGEuY2xpY2soKTsgYS5yZW1vdmUoKTsKICAgIHNldFRpbWVvdXQoKCk9PlVSTC5yZXZva2VPYmplY3VSTCh1cmwpLDEwMDApOwogIH0KICBkb2N1bWVudC5hZGRFdmVudExpc3RlbmVyKCdjbGljaycsZnVuY3Rpb24oZSl7IGlmKGUudGFyZ2V0ICYmIGUudGFyZ2V0LmlkPT09J2Rvd25sb2FkQnRuJykgZG93bmxvYWRTaGVldCgpOyB9KTsKfSkoKTsKPC9zY3JpcHQ+Cg=='
+          js = base64.b64decode(payload).decode()
+          if 'function downloadSheet' not in s:
+              s = s.replace('</body>', js + '</body>', 1)
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit and remove temporary workflow
+        run: |
+          rm -f .github/workflows/add-reconciliation-download.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html .github/workflows/add-reconciliation-download.yml
+          git commit -m 'Add reconciliation sheet download' || exit 0
+          git push
