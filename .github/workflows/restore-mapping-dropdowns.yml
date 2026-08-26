@@ -1,0 +1,63 @@
+name: Restore mapping dropdowns
+on:
+  push:
+    paths:
+      - '.github/workflows/restore-mapping-dropdowns.yml'
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore column mapping dropdowns only
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          old = '<section id="mapping" class="card hidden no-print"><h2>Confirm detected columns</h2><div id="mappingText" class="muted"></div><div class="toolbar"><button id="apply" class="btn primary">Continue</button></div></section>'
+          new = '''<section id="mapping" class="card hidden no-print">
+          <h2>Confirm detected columns</h2>
+          <div id="mappingText" class="muted" style="margin-bottom:12px"></div>
+          <div class="mapping-grid">
+          <div class="mapping-box"><h3>Bank statement</h3><div id="bankMapping"></div></div>
+          <div class="mapping-box"><h3>Accounting ledger</h3><div id="ledgerMapping"></div></div>
+          </div>
+          <div class="toolbar"><button id="apply" class="btn primary">Continue</button></div>
+          </section>'''
+          if old not in s:
+              raise SystemExit('Mapping section not found; no change made.')
+          s = s.replace(old, new, 1)
+
+          old_css = '.footer{padding:25px 0}'
+          new_css = '''.mapping-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:12px}.mapping-box{border:1px solid var(--line);border-radius:9px;padding:14px;background:#f8fafc}.mapping-box h3{margin:0 0 12px;font-size:15px}.map-row{display:grid;grid-template-columns:145px 1fr;gap:10px;align-items:center;margin:8px 0}.map-row label{font-size:12px;font-weight:700}.map-row select{width:100%;padding:9px;border:1px solid #b9c9dd;border-radius:6px;background:#fff;color:#172033}.footer{padding:25px 0}'''
+          if old_css not in s:
+              raise SystemExit('Expected CSS anchor not found; no change made.')
+          s = s.replace(old_css, new_css, 1)
+
+          old_start = "$('bf').onchange=$('lf').onchange=()=>{$('go').disabled=!($('bf').files.length&&$('lf').files.length)};$('go').onclick=start;$('apply').onclick=run;$('printBtn').onclick=()=>window.print();"
+          new_start = r'''function populateMapping(prefix,x){const box=$(prefix+'Mapping');if(!box)return;const fields=[['date','Date'],['desc','Description'],['ref','Reference'],['amount','Amount'],['debit','Debit'],['credit','Credit'],['balance','Balance']];box.innerHTML=fields.map(([key,label])=>{const opts=['<option value="-1">-- Not selected --</option>'].concat(x.headers.map((h,i)=>`<option value="${i}" ${i===x.m[key]?'selected':''}>${esc(h||('Column '+(i+1)))}</option>`)).join('');return `<div class="map-row"><label for="${prefix}-${key}">${label}</label><select id="${prefix}-${key}" data-map="${key}">${opts}</select></div>`}).join('')}
+function applyMapping(prefix,x){document.querySelectorAll('#'+prefix+'Mapping select[data-map]').forEach(sel=>{x.m[sel.dataset.map]=Number(sel.value)})}
+$('bf').onchange=$('lf').onchange=()=>{$('go').disabled=!($('bf').files.length&&$('lf').files.length)};$('go').onclick=start;$('apply').onclick=()=>{applyMapping('bank',S.bank);applyMapping('ledger',S.ledger);run()};$('printBtn').onclick=()=>window.print();'''
+          if old_start not in s:
+              raise SystemExit('Expected event-handler anchor not found; no change made.')
+          s = s.replace(old_start, new_start, 1)
+
+          old_mapping = "$('mappingText').innerHTML=`<b>Bank:</b> ${esc(S.bank.headers.join(' | '))}<br>Detected date column ${S.bank.m.date+1}, description ${S.bank.m.desc+1}, reference ${S.bank.m.ref+1}, amount ${S.bank.m.amount+1}, debit ${S.bank.m.debit+1}, credit ${S.bank.m.credit+1}, balance ${S.bank.m.balance+1}.<br><br><b>Ledger:</b> ${esc(S.ledger.headers.join(' | '))}<br>Detected date column ${S.ledger.m.date+1}, description ${S.ledger.m.desc+1}, reference ${S.ledger.m.ref+1}, amount ${S.ledger.m.amount+1}, debit ${S.ledger.m.debit+1}, credit ${S.ledger.m.credit+1}, balance ${S.ledger.m.balance+1}.`"
+          new_mapping = "$('mappingText').innerHTML=`Select or confirm the correct columns for each file before continuing.`;populateMapping('bank',S.bank);populateMapping('ledger',S.ledger);"
+          if old_mapping not in s:
+              raise SystemExit('Expected mapping display anchor not found; no change made.')
+          s = s.replace(old_mapping, new_mapping, 1)
+
+          p.write_text(s, encoding='utf-8')
+
+      - name: Commit change and remove workflow
+        run: |
+          rm -f .github/workflows/restore-mapping-dropdowns.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html .github/workflows/restore-mapping-dropdowns.yml
+          git commit -m 'Restore column mapping dropdowns only' || exit 0
+          git push
