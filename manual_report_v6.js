@@ -1,4 +1,4 @@
-/* ReconAI — authoritative working-paper report renderer v6.1 */
+/* ReconAI — authoritative working-paper report renderer v6.2 */
 (function () {
   'use strict';
   const money=n=>new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN',maximumFractionDigits:2}).format(Number(n)||0);
@@ -66,6 +66,39 @@
   window.manualReport=render;
   const legacy=window.report;
   window.report=function(){try{return render()}catch(e){console.error('Working-paper report failed:',e);return legacy?legacy.apply(this,arguments):false}};
-  document.addEventListener('click',function(ev){const btn=ev.target&&ev.target.closest?ev.target.closest('#print'):null;if(!btn||!window.S?.r)return;ev.preventDefault();ev.stopImmediatePropagation();const tab=document.querySelector('[data-t="statement"]');if(tab)tab.click();render()},true);
+
+  // Print-only mode: hide the dashboard and print the reconciliation working paper.
+  const printStyle=document.createElement('style');
+  printStyle.textContent=`@media print{
+    html,body{background:#fff!important;margin:0!important;padding:0!important}
+    body.reconai-print-mode>header,
+    body.reconai-print-mode>main>.note,
+    body.reconai-print-mode>main>#err,
+    body.reconai-print-mode>main>.grid,
+    body.reconai-print-mode>main>section:not(#res),
+    body.reconai-print-mode>main>.footer{display:none!important}
+    body.reconai-print-mode>main{display:block!important;max-width:none!important;margin:0!important;padding:0!important}
+    body.reconai-print-mode #res{display:block!important}
+    body.reconai-print-mode #res>.tabs,
+    body.reconai-print-mode #res>.panel:not(#statement){display:none!important}
+    body.reconai-print-mode #statement{display:block!important;border:0!important;box-shadow:none!important;margin:0!important;padding:0!important}
+    body.reconai-print-mode #report{display:block!important;width:100%!important}
+    body.reconai-print-mode #report .working{max-width:none!important;width:100%!important}
+  }`;
+  document.head.appendChild(printStyle);
+
+  document.addEventListener('click',function(ev){
+    const btn=ev.target&&ev.target.closest?ev.target.closest('#print'):null;
+    if(!btn||!window.S?.r)return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    const tab=document.querySelector('[data-t="statement"]');
+    if(tab)tab.click();
+    render();
+    document.body.classList.add('reconai-print-mode');
+    const cleanup=()=>document.body.classList.remove('reconai-print-mode');
+    window.addEventListener('afterprint',cleanup,{once:true});
+    setTimeout(()=>window.print(),150);
+  },true);
   [100,500,1500,3000].forEach(ms=>setTimeout(()=>{if(window.S?.r&&document.getElementById('report'))render()},ms));
 })();
