@@ -1,4 +1,4 @@
-name: Force reconciliation report renderer
+name: Install authoritative reconciliation report renderer
 
 on:
   push:
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Remove legacy report renderers and install v7
+      - name: Remove competing report renderers and install v8
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -21,8 +21,9 @@ jobs:
           s=p.read_text(encoding='utf-8')
           s=re.sub(r'<script\s+src=["\']report_template\.js(?:\?[^"\']*)?["\']\s*></script>\s*', '', s, flags=re.I)
           s=re.sub(r'<script\s+src=["\']manual_report_v[0-9]+\.js(?:\?[^"\']*)?["\']\s*></script>\s*', '', s, flags=re.I)
-          tag='<script src="manual_report_v7.js?v=7"></script>'
-          s=s.replace('</body>', tag+'\n</body>')
+          tag='<script src="manual_report_v8.js?v=8"></script>'
+          if tag not in s:
+              s=s.replace('</body>', tag+'\n</body>')
           p.write_text(s,encoding='utf-8')
           PY
       - name: Commit renderer update
@@ -31,5 +32,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "Install v7 reconciliation working paper renderer"
+          git commit -m "Install v8 manual reconciliation statement renderer"
           git push
