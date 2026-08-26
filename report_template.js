@@ -1,6 +1,6 @@
 (function(){
   function install(){
-    if(!window.S || !S.r || !S.bank || !S.ledger || typeof window.$!=='function') return;
+    if(!window.S || !S.r || !S.bank || !S.ledger || typeof window.$!=='function') return false;
     const money2=n=>new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN',maximumFractionDigits:2}).format(Number(n)||0);
     const total=a=>(a||[]).reduce((t,x)=>t+(Number(x?.amt)||0),0);
     const esc2=s=>String(s??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -104,11 +104,27 @@
 
       <div class="${status==='RECONCILED'?'ok':'error'}" style="margin-top:14px"><b>Reconciliation status: ${status}</b><br>Variance: <b>${money2(variance)}</b></div>
       <p class="small">Prepared by: ____________________ &nbsp;&nbsp;&nbsp; Reviewed by: ____________________</p>`;
+    return true;
   }
 
   const originalReport=window.report;
   window.report=function(){
     if(!window.S || !S.r || !S.bank || !S.ledger) return originalReport ? originalReport() : null;
-    try{ install(); }catch(e){ console.error('Manual reconciliation report failed:',e); if(originalReport) originalReport(); }
+    try{ return install(); }catch(e){ console.error('Manual reconciliation report failed:',e); if(originalReport) originalReport(); }
   };
+
+  // The original page attaches a normal click handler to the report button.
+  // Capture this click first so the manual statement is always rendered.
+  document.addEventListener('click',function(ev){
+    const target=ev.target && ev.target.closest ? ev.target.closest('#print') : null;
+    if(!target) return;
+    if(!window.S || !S.r || !S.bank || !S.ledger) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    try{
+      const tab=document.querySelector('[data-t="statement"]');
+      if(tab) tab.click();
+      install();
+    }catch(e){console.error('Manual report button failed:',e);}
+  },true);
 })();
