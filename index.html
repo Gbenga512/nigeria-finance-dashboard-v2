@@ -94,6 +94,7 @@ $('go').onclick=run;$('print').onclick=()=>{document.getElementById('statementPa
 $('demo').onclick=()=>{let bank=[['Date','Description','Reference','Amount','Balance'],['01/04/2026','Opening balance','','3037592.21','3037592.21'],['02/04/2026','TRANSFER CUSTOMER','','500000','3537592.21'],['03/04/2026','BANK CHARGES','','-2500','3535092.21']],led=[['Date','Description','Reference','Debit','Credit'],['01/04/2026','Opening GL','','0','3037592.21'],['02/04/2026','TRANSFER CUSTOMER','','0','500000'],['03/04/2026','BANK CHARGES','','2500','0']];S.bm=prep(bank,'Demo Bank');S.lm=prep(led,'Demo Ledger');S.bank=rec(S.bm,S.bm.cols);S.ledger=rec(S.lm,S.lm.cols);$('bc').textContent=S.bank.length;$('lc').textContent=S.ledger.length;ready();$('status').textContent='Demo data loaded. Click Start reconciliation.'};
 </script>
 <script src="reconciliation_statement_final.js?v=1"></script>
+<script src="manual_report_v8_patch.js?v=8.1"></script>
 <script src="manual_report_v8.js?v=8"></script>
 <script src="manual_report_v8_patch.js?v=8.1"></script>
 </body>
