@@ -1,0 +1,58 @@
+name: Restore column mapping dropdowns
+on:
+  push:
+    paths:
+      - 'index.html'
+      - '.github/workflows/restore-column-dropdowns.yml'
+permissions:
+  contents: write
+jobs:
+  restore:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Restore mapping dropdowns only
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old_section = '<section id="mapping" class="card hidden no-print"><h2>Confirm detected columns</h2><div id="mappingText" class="muted"></div><div class="toolbar"><button id="apply" class="btn primary">Continue</button></div></section>'
+          new_section = '''<section id="mapping" class="card hidden no-print"><h2>Confirm detected columns</h2><div id="mappingText" class="muted"></div><div id="mappingControls" class="mapgrid"></div><div class="toolbar"><button id="apply" class="btn primary">Continue</button></div></section>'''
+          if old_section not in s:
+              raise SystemExit('Mapping section not found; no changes made.')
+          s = s.replace(old_section, new_section, 1)
+          marker = '.footer{padding:25px 0}'
+          if marker in s and '.mapgrid{' not in s:
+              s = s.replace(marker, marker + '.mapgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-top:14px}.mapitem{border:1px solid var(--line);border-radius:8px;padding:10px;background:#f8fafc}.mapitem label{display:block;font-weight:700;font-size:13px;margin-bottom:6px}.mapitem select{width:100%;padding:9px;border:1px solid var(--line);border-radius:6px;background:#fff;font:inherit}@media(max-width:550px){.mapgrid{grid-template-columns:1fr}}', 1)
+          old_start = "$('mappingText').innerHTML=`<b>Bank:</b> ${esc(S.bank.headers.join(' | '))}<br>Detected date column ${S.bank.m.date+1}, description ${S.bank.m.desc+1}, reference ${S.bank.m.ref+1}, amount ${S.bank.m.amount+1}, debit ${S.bank.m.debit+1}, credit ${S.bank.m.credit+1}, balance ${S.bank.m.balance+1}.<br><br><b>Ledger:</b> ${esc(S.ledger.headers.join(' | '))}<br>Detected date column ${S.ledger.m.date+1}, description ${S.ledger.m.desc+1}, reference ${S.ledger.m.ref+1}, amount ${S.ledger.m.amount+1}, debit ${S.ledger.m.debit+1}, credit ${S.ledger.m.credit+1}, balance ${S.ledger.m.balance+1}.`;$('mapping').classList.remove('hidden');$('status').textContent='Files read successfully. Confirm the detected columns.'"
+          new_start = "renderMapping();$('mapping').classList.remove('hidden');$('status').textContent='Files read successfully. Confirm the detected columns.'"
+          if old_start not in s:
+              raise SystemExit('Start mapping code not found; no changes made.')
+          s = s.replace(old_start, new_start, 1)
+          old_apply = "$('bf').onchange=$('lf').onchange=()=>{$('go').disabled=!($('bf').files.length&&$('lf').files.length)};$('go').onclick=start;$('apply').onclick=run;$('printBtn').onclick=()=>window.print();"
+          new_apply = '''function renderMapping(){
+            const fields=[['date','Date'],['desc','Description'],['ref','Reference'],['amount','Amount'],['debit','Debit'],['credit','Credit'],['balance','Balance']];
+            const make=(prefix,x)=>fields.map(([key,label])=>{const sel=prefix+'-'+key;const opts=['<option value="-1">— Not used —</option>'].concat(x.headers.map((h,i)=>`<option value="${i}">${esc(h||('Column '+(i+1)))}</option>`)).join('');return `<div class="mapitem"><label for="${sel}">${label}</label><select id="${sel}">${opts}</select></div>`}).join('');
+            $('mappingControls').innerHTML=`<h3 style="grid-column:1/-1;margin:0">Bank statement</h3>${make('bank',S.bank)}<h3 style="grid-column:1/-1;margin:8px 0 0">Accounting ledger</h3>${make('ledger',S.ledger)}`;
+            fields.forEach(([key])=>{const b=document.getElementById('bank-'+key),l=document.getElementById('ledger-'+key);b.value=String(S.bank.m[key]);l.value=String(S.ledger.m[key]);});
+          }
+          function applyMapping(){
+            const fields=['date','desc','ref','amount','debit','credit','balance'];
+            for(const prefix of ['bank','ledger']){const target=S[prefix];fields.forEach(key=>{target.m[key]=Number(document.getElementById(prefix+'-'+key).value);});if(target.m.date<0||target.m.desc<0)throw new Error((prefix==='bank'?'Bank statement':'Accounting ledger')+' must have Date and Description selected.');if(target.m.amount<0&&(target.m.debit<0||target.m.credit<0))throw new Error((prefix==='bank'?'Bank statement':'Accounting ledger')+' must have Amount or Debit/Credit selected.');}
+            run();
+          }
+          $('bf').onchange=$('lf').onchange=()=>{$('go').disabled=!($('bf').files.length&&$('lf').files.length)};$('go').onclick=start;$('apply').onclick=applyMapping;$('printBtn').onclick=()=>window.print();'''
+          if old_apply not in s:
+              raise SystemExit('Apply handler code not found; no changes made.')
+          s = s.replace(old_apply, new_apply, 1)
+          p.write_text(s, encoding='utf-8')
+      - name: Commit mapping restoration
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m 'Restore visible column mapping dropdowns'
+          git push
