@@ -16,7 +16,7 @@
 <section id="upload" class="card no-print"><h2>Upload your files</h2><p class="muted">Excel/CSV supported. Files are processed locally in your browser. No accounting record is changed.</p><div class="filegrid"><div class="filebox"><b>Bank statement</b><br><input id="bf" type="file" accept=".xlsx,.xls,.csv"></div><div class="filebox"><b>Accounting ledger</b><br><input id="lf" type="file" accept=".xlsx,.xls,.csv"></div></div><div class="toolbar"><button id="go" class="btn primary" disabled>Start reconciliation</button></div><div class="progress"><div id="bar" class="bar"></div></div><div id="status" class="muted" style="margin-top:8px"></div></section>
 <section id="mapping" class="card hidden no-print"><h2>Confirm detected columns</h2><div id="mappingText" class="muted"></div><div class="toolbar"><button id="apply" class="btn primary">Continue</button></div></section>
 <section id="results" class="hidden no-print"><div class="tabs"><button class="tab active" data-t="matched">Matched</button><button class="tab" data-t="timing">Timing differences</button><button class="tab" data-t="grouped">Grouped matches</button><button class="tab" data-t="reversal">Reversals</button><button class="tab" data-t="unmatched">Unmatched</button><button class="tab" data-t="statement">Reconciliation statement</button></div><div id="results-ui"></div></section>
-<section id="statementPanel" class="card hidden"><div id="report"></div><div class="toolbar no-print"><button id="printBtn" class="btn success">Print / Save as PDF</button></div></section>
+<section id="statementPanel" class="card hidden"><div id="report"></div><div class="toolbar no-print"><button id="printBtn" class="btn success">Print / Save as PDF</button><button id="downloadBtn" class="btn secondary">Download reconciliation sheet</button></div></section>
 <div class="footer muted no-print">ReconAI • Human-reviewed reconciliation • No accounting records are automatically changed.</div>
 </main>
 <script>
@@ -37,4 +37,21 @@ function wireTabs(){document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 function run(){try{S.r=matchEngine(S.bank,S.ledger);$('bc').textContent=S.r.b.length;$('lc').textContent=S.r.l.length;$('mc').textContent=S.r.direct.length+S.r.timing.length;$('ec').textContent=S.r.bankRecon.length+S.r.ledgerUnmatched.length;render();$('results').classList.remove('hidden');$('mapping').classList.add('hidden');$('status').textContent='Reconciliation complete. Select “Reconciliation statement” to view the working paper.';$('bar').style.width='100%'}catch(e){$('err').textContent=e.message||String(e);$('err').classList.remove('hidden')}}
 async function start(){try{$('err').classList.add('hidden');$('status').textContent='Reading files…';$('bar').style.width='25%';S.bank=await readFile($('bf').files[0]);$('bar').style.width='45%';S.ledger=await readFile($('lf').files[0]);$('bar').style.width='65%';$('mappingText').innerHTML=`<b>Bank:</b> ${esc(S.bank.headers.join(' | '))}<br>Detected date column ${S.bank.m.date+1}, description ${S.bank.m.desc+1}, reference ${S.bank.m.ref+1}, amount ${S.bank.m.amount+1}, debit ${S.bank.m.debit+1}, credit ${S.bank.m.credit+1}, balance ${S.bank.m.balance+1}.<br><br><b>Ledger:</b> ${esc(S.ledger.headers.join(' | '))}<br>Detected date column ${S.ledger.m.date+1}, description ${S.ledger.m.desc+1}, reference ${S.ledger.m.ref+1}, amount ${S.ledger.m.amount+1}, debit ${S.ledger.m.debit+1}, credit ${S.ledger.m.credit+1}, balance ${S.ledger.m.balance+1}.`;$('mapping').classList.remove('hidden');$('status').textContent='Files read successfully. Confirm the detected columns.'}catch(e){$('err').textContent='Unable to read the files: '+(e.message||e);$('err').classList.remove('hidden')}}
 $('bf').onchange=$('lf').onchange=()=>{$('go').disabled=!($('bf').files.length&&$('lf').files.length)};$('go').onclick=start;$('apply').onclick=run;$('printBtn').onclick=()=>window.print();
-</script></body></html>
+</script>
+<script>
+(function(){
+  function downloadSheet(){
+    const report=document.getElementById('report');
+    if(!report || !report.innerHTML.trim()){ alert('Please complete the reconciliation first.'); return; }
+    const title=(document.title||'Bank Reconciliation Statement').replace(/[^a-z0-9_-]+/gi,'-');
+    const css=`body{font-family:Arial,Helvetica,sans-serif;background:#fff;color:#111;margin:0;padding:24px}.working{background:#fff;color:#111;max-width:1000px;margin:auto;padding:25px}.working .title{text-align:center;border-bottom:2px solid #333;padding-bottom:10px;margin-bottom:12px}.working .title h1{font-size:19px;margin:0}.working .title h2{font-size:14px;margin:5px 0}.working table{width:100%;border-collapse:collapse;min-width:0}.working th,.working td{border:1px solid #555;padding:5px 6px;font-size:10.5px}.working th{background:#ddd}.working .barhead{background:#666;color:#fff;font-weight:700}.working .shade{background:#ddd;font-weight:700}.working .total{font-weight:700;background:#eee}.working .amount{text-align:right;white-space:nowrap}.working .memo{font-size:10.5px;font-style:italic;margin:8px 0}.working .variance{font-weight:800}`;
+    const html='<!doctype html><html><head><meta charset="utf-8"><title>'+title+'</title><style>'+css+'</style></head><body>'+report.innerHTML+'</body></html>';
+    const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a'); a.href=url; a.download=title+'-reconciliation.html'; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjecuRL(url),1000);
+  }
+  document.addEventListener('click',function(e){ if(e.target && e.target.id==='downloadBtn') downloadSheet(); });
+})();
+</script>
+</body></html>
