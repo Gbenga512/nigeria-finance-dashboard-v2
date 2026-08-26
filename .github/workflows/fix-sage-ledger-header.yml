@@ -1,0 +1,34 @@
+name: Fix Sage ledger header detection
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ !contains(github.event.head_commit.message, 'Fix Sage ledger header detection') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fix only header-row detection
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          old = '''function headerLooksLikeMetadata(v){let s=String(v??'').trim();return s.length>120||/^\\s*[\\[{]/.test(s)||/dictionaryAddress|serverUrlAddress|documentUrlAddress|worksheet/i.test(s)}function findHeader(rows){let best=0,bs=-1;for(let i=0;i<Math.min(rows.length,120);i++){let row=rows[i]||[],scoreRow=0,usable=0,metadata=0;for(const v of row){let text=String(v??'').trim();if(!text)continue;if(headerLooksLikeMetadata(text)){metadata++;continue}usable++;let hit=0;for(const t in W){if(score(text,t)){hit=1;break}}scoreRow+=hit}scoreRow=scoreRow*20+Math.min(usable,12)-metadata*25;if(scoreRow>bs){bs=scoreRow;best=i}}return best}'''
+          new = '''function headerLooksLikeMetadata(v){let s=String(v??'').trim();return s.length>120||/^(https?:\\/\\/|ftp:\\/\\/)/i.test(s)||/^\\s*[\\[{]/.test(s)||/dictionaryAddress|serverUrlAddress|documentUrlAddress|worksheet/i.test(s)}function findHeader(rows){let best=0,bestScore=-1,bestHits=0;for(let i=0;i<Math.min(rows.length,200);i++){let row=rows[i]||[],hits=0,nonempty=0,metadata=0,seen=new Set();for(const v of row){let text=String(v??'').trim();if(!text)continue;nonempty++;if(headerLooksLikeMetadata(text)){metadata++;continue}for(const t in W){if(score(text,t)){hits++;seen.add(t);break}}}let distinct=seen.size,rowScore=distinct*100+hits*20+Math.min(nonempty,20)-metadata*100;if(distinct>=2&&rowScore>bestScore){bestScore=rowScore;best=i;bestHits=distinct}}if(bestHits>=2)return best;best=0;bestScore=-1;for(let i=0;i<Math.min(rows.length,200);i++){let row=rows[i]||[],s=0;for(const v of row)for(const t in W)if(score(v,t)){s++;break}if(s>bestScore){bestScore=s;best=i}}return best}'''
+          if old not in s:
+              raise SystemExit('Expected current header detector not found')
+          s = s.replace(old, new, 1)
+          p.write_text(s, encoding='utf-8')
+      - name: Commit fix
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git diff --cached --quiet || git commit -m 'Fix Sage ledger header detection'
+          git push
