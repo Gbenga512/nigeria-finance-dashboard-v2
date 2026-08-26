@@ -1,0 +1,104 @@
+name: Exact match reconciliation fix
+
+"on":
+  push:
+    paths:
+      - '.github/workflows/exact-match-reconciliation.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Update reconciliation matching engine
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          new_fn = r'''function matchEngine(bank,ledger){
+          let b=transactionRows(bank,'bank'),l=transactionRows(ledger,'ledger'),usedB=new Set(),usedL=new Set(),direct=[],timing=[],grouped=[],reversals=[],candidates=[];
+          // First pass: exact accounting match. If a bank item and a ledger item have
+          // the same transaction date and exactly the same signed amount, treat them
+          // as matched regardless of narration/reference wording. These items must not
+          // appear as reconciling items in the bank reconciliation statement.
+          const exactL=new Map();
+          for(let j=0;j<l.length;j++){
+            if(!l[j].date) continue;
+            const key=l[j].date.toISOString().slice(0,10)+'|'+l[j].signed.toFixed(2);
+            if(!exactL.has(key)) exactL.set(key,[]);
+            exactL.get(key).push(j);
+          }
+          for(let i=0;i<b.length;i++){
+            if(!b[i].date) continue;
+            const key=b[i].date.toISOString().slice(0,10)+'|'+b[i].signed.toFixed(2);
+            const pool=exactL.get(key)||[];
+            while(pool.length && usedL.has(pool[0])) pool.shift();
+            if(pool.length){
+              const j=pool.shift();
+              usedB.add(i); usedL.add(j);
+              direct.push({bank:b[i],ledger:l[j],confidence:100,matchType:'Exact date and amount'});
+            }
+          }
+
+          // Second pass: existing reference/description/date similarity matching.
+          for(let i=0;i<b.length;i++){
+            if(usedB.has(i)) continue;
+            for(let j=0;j<l.length;j++){
+              if(usedL.has(j)||Math.abs(b[i].signed-l[j].signed)>.01) continue;
+              let ref=b[i].ref&&l[j].ref&&norm(b[i].ref)===norm(l[j].ref)?1:0,ss=sim(b[i].desc,l[j].desc),dg=days(b[i].date,l[j].date),sc=ref*.65+ss*.25+(dg<=3?.1:0);
+              if(sc>=.25)candidates.push({i,j,score:sc,dg});
+            }
+          }
+          candidates.sort((a,z)=>z.score-a.score);
+          for(const c of candidates){
+            if(usedB.has(c.i)||usedL.has(c.j)) continue;
+            usedB.add(c.i); usedL.add(c.j);
+            let z={bank:b[c.i],ledger:l[c.j],confidence:Math.min(100,Math.round(c.score*100))};
+            (c.dg>3?timing:direct).push(z);
+          }
+
+          let ub=b.filter((_,i)=>!usedB.has(i)&&!bankCharge(b[i])),ul=l.filter((_,i)=>!usedL.has(i));
+          for(const x of ub){
+            let p=ul.filter(y=>Math.abs(x.signed-y.signed)>.01&&days(x.date,y.date)<=7),f=null;
+            for(let a=0;a<p.length&&!f;a++)for(let q=a+1;q<p.length;q++)if(Math.abs(p[a].signed+p[q].signed-x.signed)<.01){f=[p[a],p[q]];break}
+            if(f){f.forEach(y=>usedL.add(y.i));usedB.add(x.i);grouped.push({bankItems:[x],ledgerItems:f,basis:'One bank transaction equals two ledger postings'});
+            }
+          }
+          ub=b.filter((_,i)=>!usedB.has(i)&&!bankCharge(b[i]));
+          ul=l.filter((_,i)=>!usedL.has(i));
+          for(const y of ul){
+            let p=ub.filter(x=>Math.abs(x.signed-y.signed)>.01&&days(x.date,y.date)<=7),f=null;
+            for(let a=0;a<p.length&&!f;a++)for(let q=a+1;q<p.length;q++)if(Math.abs(p[a].signed+p[q].signed-y.signed)<.01){f=[p[a],p[q]];break}
+            if(f){f.forEach(x=>usedB.add(x.i));usedL.add(y.i);grouped.push({bankItems:f,ledgerItems:[y],basis:'Two bank transactions equal one ledger posting'});
+            }
+          }
+          let left=l.filter((_,i)=>!usedL.has(i));
+          for(let a=0;a<left.length;a++)for(let q=a+1;q<left.length;q++){
+            let x=left[a],y=left[q];
+            if(Math.abs(x.signed+y.signed)<.01&&days(x.date,y.date)<=3){usedL.add(x.i);usedL.add(y.i);reversals.push({a:x,b:y});}
+          }
+          let bankUnmatched=b.filter((x,i)=>!usedB.has(i)),ledgerUnmatched=l.filter((x,i)=>!usedL.has(i)),charges=bankUnmatched.filter(bankCharge),bankRecon=bankUnmatched.filter(x=>!bankCharge(x));
+          return{b,l,direct,timing,grouped,reversals,bankUnmatched,ledgerUnmatched,charges,bankRecon}
+          }'''
+
+          pattern=r'function matchEngine\(bank,ledger\)\{.*?\nfunction total'
+          replacement=new_fn+'\nfunction total'
+          updated,n=re.subn(pattern,replacement,s,flags=re.S)
+          if n!=1:
+              raise SystemExit(f'Expected exactly one matchEngine block, found {n}')
+          p.write_text(updated,encoding='utf-8')
+      - name: Commit fix and remove temporary workflow
+        run: |
+          rm -f .github/workflows/exact-match-reconciliation.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html .github/workflows/exact-match-reconciliation.yml
+          git commit -m 'Exclude exact same-date same-amount matches from reconciliation' || exit 0
+          git push
