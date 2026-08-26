@@ -12,14 +12,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Inject report template
+      - name: Inject report template with cache bust
         run: |
           python - <<'PY'
           from pathlib import Path
           import re
           p=Path('index.html')
           s=p.read_text(encoding='utf-8')
-          tag='<script src="report_template.js?v=3"></script>'
+          tag='<script src="report_template.js?v=4"></script>'
           s=re.sub(r'<script src="report_template\\.js(?:\\?v=[^"]+)?"></script>', tag, s)
           if tag not in s:
               s=s.replace('</body>', tag+'\n</body>')
@@ -31,5 +31,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add index.html
           git diff --cached --quiet && exit 0
-          git commit -m "Bust reconciliation report template cache"
+          git commit -m "Force latest manual reconciliation template"
           git push
