@@ -1,0 +1,52 @@
+name: Fix print report layout
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-print:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Force print to show only reconciliation working paper
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+          marker = '/* ReconAI print-only working paper layout */'
+          css = '''<style>
+          /* ReconAI print-only working paper layout */
+          @media print {
+            html, body { background:#fff !important; margin:0 !important; padding:0 !important; }
+            body > header,
+            body > main > .note,
+            body > main > #err,
+            body > main > .grid,
+            body > main > section:not(#res),
+            body > main > .footer { display:none !important; }
+            body > main { display:block !important; max-width:none !important; margin:0 !important; padding:0 !important; }
+            #res { display:block !important; }
+            #res > .tabs,
+            #res > .panel:not(#statement) { display:none !important; }
+            #statement { display:block !important; border:0 !important; box-shadow:none !important; margin:0 !important; padding:0 !important; }
+            #report { display:block !important; width:100% !important; }
+            #report .working { max-width:none !important; width:100% !important; }
+          }
+          </style>'''
+          if marker not in s:
+              s = s.replace('</head>', css + '\n</head>')
+              p.write_text(s, encoding='utf-8')
+          PY
+      - name: Commit print layout fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --quiet && exit 0
+          git commit -m "Fix print preview to show reconciliation working paper only"
+          git push
