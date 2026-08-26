@@ -1,8 +1,0 @@
-name: Legacy report-injection workflow retired
-on:
-  workflow_dispatch:
-jobs:
-  retired:
-    runs-on: ubuntu-latest
-    steps:
-      - run: echo "Legacy report injection retired. index.html is now the sole reconciliation renderer."
