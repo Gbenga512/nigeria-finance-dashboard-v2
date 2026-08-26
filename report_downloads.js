@@ -2,36 +2,24 @@
   'use strict';
   function addStyle(){
     if(document.getElementById('recon-export-style')) return;
-    const s=document.createElement('style');
-    s.id='recon-export-style';
+    const s=document.createElement('style');s.id='recon-export-style';
     s.textContent='.export-toolbar{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 18px}.export-btn{border:0;border-radius:9px;padding:11px 16px;font-weight:700;cursor:pointer}.export-excel{background:#dff7ee;color:#087f5b}.export-pdf{background:#fee2e2;color:#991b1b}.export-btn:disabled{opacity:.6;cursor:not-allowed}@media print{.export-toolbar{display:none!important}}';
     document.head.appendChild(s);
   }
   function loadPdfLibraries(){
     return new Promise((resolve,reject)=>{
-      if(window.jspdf && window.jspdf.jsPDF && window.jspdfAutoTable) return resolve();
+      if(window.jspdf&&window.jspdf.jsPDF&&(window.jspdfAutoTable||window.autoTable))return resolve();
       let need=0;
-      function done(){need--;if(need<=0){
-        if(window.jspdf && window.jspdf.jsPDF && window.jspdfAutoTable) resolve();
-        else reject(new Error('PDF library could not be loaded. Please check your internet connection and try again.'));
-      }}
-      if(!(window.jspdf && window.jspdf.jsPDF)){
-        need++;
-        const a=document.createElement('script');a.src='https://unpkg.com/jspdf@4.0.0/dist/jspdf.umd.min.js';
-        a.onload=done;a.onerror=()=>reject(new Error('Unable to load the PDF engine.'));document.head.appendChild(a);
-      }
-      if(!window.jspdfAutoTable){
-        need++;
-        const b=document.createElement('script');b.src='https://unpkg.com/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js';
-        b.onload=()=>{window.jspdfAutoTable=window.jspdfAutoTable||window.autoTable;done()};
-        b.onerror=()=>reject(new Error('Unable to load the PDF table engine.'));document.head.appendChild(b);
-      }
+      function done(){need--;if(need<=0){if(window.jspdf&&window.jspdf.jsPDF&&(window.jspdfAutoTable||window.autoTable))resolve();else reject(new Error('PDF library could not be loaded. Please check your internet connection and try again.'));}}
+      if(!(window.jspdf&&window.jspdf.jsPDF)){need++;const a=document.createElement('script');a.src='https://unpkg.com/jspdf@4.0.0/dist/jspdf.umd.min.js';a.onload=done;a.onerror=()=>reject(new Error('Unable to load the PDF engine.'));document.head.appendChild(a)}
+      if(!(window.jspdfAutoTable||window.autoTable)){need++;const b=document.createElement('script');b.src='https://unpkg.com/jspdf-autotable@5.0.8/dist/jspdf.plugin.autotable.min.js';b.onload=()=>{window.jspdfAutoTable=window.jspdfAutoTable||window.autoTable||null;done()};b.onerror=()=>reject(new Error('Unable to load the PDF table engine.'));document.head.appendChild(b)}
     });
   }
   function dateText(v){try{return v?new Date(v).toLocaleDateString('en-NG',{day:'2-digit',month:'short',year:'numeric'}):''}catch(e){return String(v??'')}}
   function amount(n){return new Intl.NumberFormat('en-NG',{style:'currency',currency:'NGN',maximumFractionDigits:2}).format(Number(n)||0)}
+  function hasReport(){return typeof S!=='undefined'&&S&&S.r}
   function downloadExcel(){
-    if(!window.S||!S.r){alert('Please complete a reconciliation before downloading the Excel report.');return}
+    if(!hasReport()){alert('Please complete a reconciliation before downloading the Excel report.');return}
     if(!window.XLSX){alert('Excel export library is not available.');return}
     const r=S.r,wb=XLSX.utils.book_new();
     const bankTotal=(S.bank||[]).reduce((a,x)=>a+(Number(x.amt)||0),0),ledgerTotal=(S.ledger||[]).reduce((a,x)=>a+(Number(x.amt)||0),0),variance=bankTotal-ledgerTotal;
@@ -45,11 +33,11 @@
     XLSX.writeFile(wb,'ReconAI_Bank_Reconciliation_'+new Date().toISOString().slice(0,10)+'.xlsx');
   }
   async function downloadPdf(){
-    if(!window.S||!S.r){alert('Please complete a reconciliation before downloading the PDF report.');return}
+    if(!hasReport()){alert('Please complete a reconciliation before downloading the PDF report.');return}
     const btn=document.getElementById('download-pdf');if(btn){btn.disabled=true;btn.textContent='Preparing PDF…'}
     try{
-      await loadPdfLibraries();const jsPDF=window.jspdf.jsPDF,autoTable=window.jspdfAutoTable||window.autoTable,r=S.r;
-      const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'}),bankTotal=(S.bank||[]).reduce((a,x)=>a+(Number(x.amt)||0),0),ledgerTotal=(S.ledger||[]).reduce((a,x)=>a+(Number(x.amt)||0),0),variance=bankTotal-ledgerTotal,status=r.unB.length===0&&r.unL.length===0?'RECONCILED':'REVIEW REQUIRED';
+      await loadPdfLibraries();const jsPDF=window.jspdf.jsPDF;const autoTable=window.jspdfAutoTable||window.autoTable||(window.jspdfAutoTable&&window.jspdfAutoTable.autoTable);if(typeof autoTable!=='function')throw new Error('PDF table engine is not available.');
+      const r=S.r,doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'}),bankTotal=(S.bank||[]).reduce((a,x)=>a+(Number(x.amt)||0),0),ledgerTotal=(S.ledger||[]).reduce((a,x)=>a+(Number(x.amt)||0),0),variance=bankTotal-ledgerTotal,status=r.unB.length===0&&r.unL.length===0?'RECONCILED':'REVIEW REQUIRED';
       doc.setFontSize(16);doc.setFont(undefined,'bold');doc.text('RECONAI',105,14,{align:'center'});doc.setFontSize(12);doc.text('BANK RECONCILIATION STATEMENT',105,21,{align:'center'});doc.setFontSize(8);doc.setFont(undefined,'normal');doc.text('Generated '+new Date().toLocaleString('en-NG'),105,27,{align:'center'});
       autoTable(doc,{startY:34,head:[['Description','Amount (NGN)']],body:[['Total bank transaction value',bankTotal],['Total ledger transaction value',ledgerTotal],['Difference / variance',variance]],styles:{fontSize:8},headStyles:{fontStyle:'bold'},columnStyles:{1:{halign:'right'}}});
       let y=doc.lastAutoTable.finalY+8;doc.setFontSize(10);doc.setFont(undefined,'bold');doc.text('Reconciling items',14,y);doc.setFont(undefined,'normal');
