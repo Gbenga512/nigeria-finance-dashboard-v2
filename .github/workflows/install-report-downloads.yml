@@ -13,19 +13,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Add Excel and PDF download module
+      - name: Add Excel and PDF download modules
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
           p = Path('index.html')
           s = p.read_text(encoding='utf-8')
-          tag = '<script src="report_downloads.js?v=1"></script>'
-          if tag not in s:
-              marker = '</body>'
-              if marker not in s:
-                  raise SystemExit('Could not find </body> in index.html')
-              s = s.replace(marker, tag + '\n' + marker, 1)
+          tags = [
+              '<script src="report_downloads.js?v=1"></script>',
+              '<script src="download_fix.js?v=2"></script>'
+          ]
+          marker = '</body>'
+          if marker not in s:
+              raise SystemExit('Could not find </body> in index.html')
+          changed = False
+          for tag in tags:
+              if tag not in s:
+                  s = s.replace(marker, tag + '\n' + marker, 1)
+                  changed = True
+          if changed:
               p.write_text(s, encoding='utf-8')
           PY
       - name: Commit installation
